@@ -15,7 +15,7 @@ def test_predict():
     test_transactions = [
         {"date": str(date(2020, i, j)), "amount": -100}
         for i in range(1, 10)
-        for j in [5,17,26]
+        for j in [5, 17, 26]
     ]
 
     test_data = {
