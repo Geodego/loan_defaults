@@ -1,3 +1,7 @@
+"""
+Tests for tools.py
+"""
+
 from src.tools import get_path_root, root_directory, get_absolute_path
 
 
