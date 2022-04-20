@@ -1,3 +1,7 @@
+"""
+Test the API
+"""
+
 import json
 from datetime import date
 
