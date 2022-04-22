@@ -1,13 +1,21 @@
+"""
+This file is used to define the objective function used by Optuna when fine-tuning hyper-parameters.
+"""
+
 import numpy as np
 import pandas as pd
+from optuna import Trial
 from lightgbm import LGBMRegressor
 from lightgbm import early_stopping
 from lightgbm import log_evaluation
 from sklearn.metrics import mean_squared_error
 
 
-def objective(trial, train_x, test_x, train_y, test_y):
-    """Optimisation function using Optuna. The objective of our fuction is to minimize the RMSE"""
+def objective(trial: Trial, train_x: pd.DataFrame, test_x: pd.DataFrame,
+              train_y: np.array, test_y: np.array) -> float:
+    """
+    Optimisation function using Optuna. The objective of our function is to minimize the RMSE
+    """
     param = {
         'metric': 'rmse',
         'random_state': 48,
@@ -23,11 +31,8 @@ def objective(trial, train_x, test_x, train_y, test_y):
         'cat_smooth': trial.suggest_int('min_data_per_groups', 1, 100)
     }
     model = LGBMRegressor(**param)
-
     model.fit(train_x, train_y, eval_set=[(test_x, test_y)], callbacks=[early_stopping(100), log_evaluation(100)])
-
     preds = model.predict(test_x)
-
     rmse = mean_squared_error(test_y, preds, squared=False)
 
     return rmse
