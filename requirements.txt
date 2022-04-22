@@ -1,9 +1,8 @@
 fastapi==0.75.1
 pydantic==1.9.0
-requests~=2.27.1
-uvicorn
+requests==2.27.1
+uvicorn==0.16.0
 black
-pandas~=1.4.1
-pytest~=7.1.1
-jupyterlab
-numpy~=1.21.5
+numpy==1.21.5
+joblib==1.1.0
+pandas==1.4.1
