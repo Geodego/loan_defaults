@@ -1,16 +1,16 @@
 """
-Library of functions used to manipulate data
+Library of functions used to manipulate data.
 """
 
 import pandas as pd
 from pandas.tseries.offsets import Day
 from typing import Tuple
-from .tools import get_absolute_path
+from tools import get_absolute_path
 
 
 def get_data(local_file_path: str) -> pd.DataFrame:
     """
-    Return dataframe corresponding to csv file in local_file_path
+    Return a dataframe corresponding to the csv file located in local_file_path
     :param local_file_path: local path within the project eg: 'data/accounts.csv'
     :return:
     pd.DataFrame
@@ -30,7 +30,7 @@ def select_accounts_with_history(accounts: pd.DataFrame, transactions: pd.DataFr
                                  ) -> set:
     """
     Select account ids having sufficient history of transactions. The available transaction history on each account
-    is defined as the time elapsed since the oldest transaction recorded on this account and the update date of the
+    is defined as the time elapsed between the oldest transaction recorded on this account and the update date of the
     account, not the date of the latest transaction on the account.
     :param accounts: dataframe with accounts information
     :param transactions: dataframe with history of transactions for different accounts
@@ -55,7 +55,7 @@ def get_df_with_history(accounts: pd.DataFrame, transactions: pd.DataFrame, hist
     :param accounts: dataframe with accounts information
     :param transactions: dataframe with history of transactions for different accounts
     :param histo: minimum history required in days
-    :return: tuple of accounts and transactions dataframes for selected accounts.
+    :return: tuple of accounts and transactions dataframes for selected accounts with sufficient history.
     """
     selected_accounts = select_accounts_with_history(accounts, transactions, histo)
     new_accounts = accounts[accounts['id'].isin(selected_accounts)].copy()
@@ -65,12 +65,14 @@ def get_df_with_history(accounts: pd.DataFrame, transactions: pd.DataFrame, hist
 
 def get_monthly_flows(transactions: pd.DataFrame, update_date: pd.Timestamp) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Get outflows and inflows over 30 days periods
-    :param transactions:
-    :param update_date:
+    Get outflows and inflows over 30 days periods. We split the history in 30 days buckets and calculate the sum of
+    inflows and outflows for each bucket and each account.
+    :param transactions: dataframe with history of transactions for different accounts
+    :param update_date: time when the accounts data were updated.
     :return:
-    pd.Dataframes inflow and outflow. Both have account id as index and a Timestamp corresponding as the last day of
-    the 30 days period as column names.
+    pd.Dataframes inflow and outflow. Both have account id as index and a Timestamp corresponding to the last day of
+    the 30 days period as column names. For example the column in inflow representing se the sum of inflows between
+    the 1/03/2022 and 30/03/2022 will have 30/03/2022 as name.
     """
     # we first split inflows and outflows
     df = transactions.copy()
@@ -109,10 +111,10 @@ def get_monthly_flows(transactions: pd.DataFrame, update_date: pd.Timestamp) -> 
 
 def get_initial_balance(accounts: pd.DataFrame, inflow: pd.DataFrame, outflow: pd.DataFrame) -> pd.Series:
     """
-    Get initial account balances
-    :param accounts:
-    :param inflow:
-    :param outflow:
+    Get initial account balances before any of the transaction recorded in our data occurred.
+    :param accounts: dataframe with accounts information
+    :param inflow: dataframe with history of monthly inflows
+    :param outflow: dataframe with history of monthly outflows
     :return:
     pd.Series with accounts as index and initial balances as values.
     """
@@ -123,21 +125,28 @@ def get_initial_balance(accounts: pd.DataFrame, inflow: pd.DataFrame, outflow: p
     return initial_balance
 
 
-def build_template_6m(initial_balance, inflow, outflow, inference=False) -> pd.DataFrame:
+def build_template_6m(initial_balance: pd.Series, inflow: pd.DataFrame, outflow: pd.DataFrame,
+                      inference: bool = False) -> pd.DataFrame:
     """
-    Build dataframe used for training given initial balance and 7month inflow and outflow. The columns names are
+    This method, depending on the value of parameter inference is used for processing data for training or
+    for inference.
+
+    training (inference=False):
+    Build a dataframe used for training given initial balance and 7 months inflow and outflow. The columns names are
     standardized as 'kM inflow' or 'kM outflow' indicating the kth month of data. The column 'initial_balance', gives
     the balance of the accounts before the first period considered. The last column, 'true_outgoing' will
     be used to supervise the predictions made with the 6 previous months. This will allow us to build 6 month
     history data across different periods and train our model on the resulting data.
 
+    inference (inference=True):
     When inference is True, build template for inference. Similar as in the training case except that there are no
-    true_outgon column and inflow and outflow have 6 columns instead of 7.
-    :param initial_balance:
-    :param inflow:
-    :param outflow:
-    :param inference:
+    'true_outgoing' column and inflow and outflow have 6 columns instead of 7.
+    :param initial_balance: pd.Series with accounts as index and initial balances as values.
+    :param inflow: dataframe with history of monthly inflows
+    :param outflow: dataframe with history of monthly outflows
+    :param inference: Boolean parameter used to determinate if the method is used for training or for inference.
     :return:
+    pd.Dataframe that can be used for training or for inference by sklearn models.
     """
     if inference:
         inflow_cols = {col: f'{i + 1}M inflow' for i, col in enumerate(inflow.columns)}
@@ -164,16 +173,20 @@ def build_template_6m(initial_balance, inflow, outflow, inference=False) -> pd.D
     return template
 
 
-def build_training_data(initial_balance, inflow, outflow, test_size: int = 2):
+def build_training_data(initial_balance: pd.Series, inflow: pd.DataFrame,
+                        outflow: pd.DataFrame, test_size: int = 2) -> dict:
     """
-
-    :param initial_balance:
-    :param inflow:
-    :param outflow:
+    Process the data so that they can be used for training. Split the data between training, validation and testing.
+    For each of these group roll 7 months over time, creating a 13 columns dataframe X made of 6 months of inflow,
+    6 months of outflow and the initial balance and a numpy array y containing the monthly outflows of the seventh
+    month.
+    :param initial_balance: pd.Series with accounts as index and initial balances as values.
+    :param inflow: dataframe with history of monthly inflows
+    :param outflow: dataframe with history of monthly outflows
     :param test_size: int, represent the number of months kept for to the test split.
     :return:
+    Dictionary {'train': {'X':, 'y':}, 'val': {'X':, 'y':}, 'test': {'X':, 'y':}.
     """
-    """organise the training data rolling over time. Split between training, validation and test"""
     n_months = inflow.shape[1]
     df_list = {'train': [], 'val': [], 'test': []}
 
@@ -213,8 +226,16 @@ def build_training_data(initial_balance, inflow, outflow, test_size: int = 2):
     return training_data
 
 
-def get_training_data(test_size: int = 2):
-    """Regroup all the steps needed to process the data for training"""
+def get_training_data(test_size: int = 2) -> dict:
+    """
+    Regroup all the steps needed to process the data for training. Split the data between training, validation and
+    testing. For each of these group roll 7 months over time, creating a 13 columns dataframe X made of 6 months of inflow,
+    6 months of outflow and the initial balance and a numpy array y containing the monthly outflows of the seventh
+    month.
+    :param test_size: int, represent the number of months kept for to the test split.
+    :return:
+    Dictionary {'train': {'X':, 'y':}, 'val': {'X':, 'y':}, 'test': {'X':, 'y':}.
+    """
     # get the raw data
     account_path = "data/accounts.csv"
     transaction_path = "data/transactions.csv"
@@ -235,8 +256,14 @@ def get_training_data(test_size: int = 2):
     return training_data
 
 
-def process_data(accounts, transactions):
-    """process data so that they can be used for inference by the api"""
+def process_data(accounts: pd.DataFrame, transactions: pd.DataFrame) -> pd.DataFrame:
+    """
+    process data so that they can be used for inference.
+    :param accounts: dataframe with accounts information
+    :param transactions: dataframe with history of transactions for different accounts
+    :return:
+    pd.Dataframe that can be used for inference by sklearn models.
+    """
     # we get the monthly (30 days) inflow and outflow of each account
     update_date = accounts['update_date'].iloc[0]
     inflow, outflow = get_monthly_flows(transactions, update_date)
