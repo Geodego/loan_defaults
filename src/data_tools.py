@@ -123,59 +123,130 @@ def get_initial_balance(accounts: pd.DataFrame, inflow: pd.DataFrame, outflow: p
     return initial_balance
 
 
-def build_training_template_6m(initial_balance, inflow, outflow) -> pd.DataFrame:
+def build_template_6m(initial_balance, inflow, outflow, inference=False) -> pd.DataFrame:
     """
     Build dataframe used for training given initial balance and 7month inflow and outflow. The columns names are
     standardized as 'kM inflow' or 'kM outflow' indicating the kth month of data. The column 'initial_balance', gives
     the balance of the accounts before the first period considered. The last column, 'true_outgoing' will
     be used to supervise the predictions made with the 6 previous months. This will allow us to build 6 month
     history data across different periods and train our model on the resulting data.
+
+    When inference is True, build template for inference. Similar as in the training case except that there are no
+    true_outgon column and inflow and outflow have 6 columns instead of 7.
     :param initial_balance:
     :param inflow:
     :param outflow:
+    :param inference:
     :return:
     """
-    # we only keep accounts that have a transaction during the period considered
-    active_accounts = (inflow != 0).any(axis=1) | (outflow != 0).any(axis=1)
-    active_inflow = inflow.copy().loc[active_accounts]
-    active_outflow = outflow.copy().loc[active_accounts]
-    active_inflow = active_inflow.iloc[:, :6]  # we don't need the 7 month of inflow
+    if inference:
+        inflow_cols = {col: f'{i + 1}M inflow' for i, col in enumerate(inflow.columns)}
+        outflow_cols = {col: f'{i + 1}M outflow' for i, col in enumerate(outflow.columns)}
+        inflow.rename(columns=inflow_cols, inplace=True)
+        outflow.rename(columns=outflow_cols, inplace=True)
+        template = inflow.merge(outflow, left_index=True, right_index=True)
+    else:
+        # we only keep accounts that have a transaction during the period considered
+        active_accounts = (inflow != 0).any(axis=1) | (outflow != 0).any(axis=1)
+        active_inflow = inflow.copy().loc[active_accounts]
+        active_outflow = outflow.copy().loc[active_accounts]
+        active_inflow = active_inflow.iloc[:, :6]  # we don't need the 7 month of inflow
 
-    inflow_cols = {col: f'{i + 1}M inflow' for i, col in enumerate(active_inflow.columns)}
-    outflow_cols = {col: f'{i + 1}M outflow' for i, col in enumerate(active_outflow.columns)}
-    outflow_cols[active_outflow.columns[-1]] = 'true_outgoing'
-    active_inflow.rename(columns=inflow_cols, inplace=True)
-    active_outflow.rename(columns=outflow_cols, inplace=True)
-    template = active_inflow.merge(active_outflow, left_index=True, right_index=True)
+        inflow_cols = {col: f'{i + 1}M inflow' for i, col in enumerate(active_inflow.columns)}
+        outflow_cols = {col: f'{i + 1}M outflow' for i, col in enumerate(active_outflow.columns)}
+        outflow_cols[active_outflow.columns[-1]] = 'true_outgoing'
+        active_inflow.rename(columns=inflow_cols, inplace=True)
+        active_outflow.rename(columns=outflow_cols, inplace=True)
+        template = active_inflow.merge(active_outflow, left_index=True, right_index=True)
+
     initial_balance.name = 'initial_balance'
     template = template.merge(initial_balance, left_index=True, right_index=True)
     return template
 
 
-def build_training_data(initial_balance, inflow, outflow):
-    """organise the training data rolling over time"""
+def build_training_data(initial_balance, inflow, outflow, test_size: int = 2):
+    """
+
+    :param initial_balance:
+    :param inflow:
+    :param outflow:
+    :param test_size: int, represent the number of months kept for to the test split.
+    :return:
+    """
+    """organise the training data rolling over time. Split between training, validation and test"""
     n_months = inflow.shape[1]
-    df_list = []
-    for k in range(n_months-6):
-        inflow_7m = inflow.iloc[:, k:k+7]
-        outflow_7m =  outflow.iloc[:, k:k+7]
-        template = build_training_template_6m(initial_balance, inflow_7m, outflow_7m)
+    df_list = {'train': [], 'val': [], 'test': []}
+
+    # we keep the last test_size months for testing
+    # In the data left for training, we keep the last val_size months for validation
+    val_size = test_size
+    # we are left with train_size months for training
+    train_size = n_months - test_size - val_size
+    for k in range(n_months - 6):
+        # data_for tells if the data we are processing are for train, val or test. For that decision we need to check to
+        # which part of the data (train, val, test) the last month of the bucket belongs
+        bucket_last_month = k + 7
+        if bucket_last_month <= train_size:
+            data_for = 'train'
+        elif bucket_last_month <= train_size + val_size:
+            data_for = 'val'
+        else:
+            data_for = 'test'
+        inflow_7m = inflow.iloc[:, k:k + 7]
+        outflow_7m = outflow.iloc[:, k:k + 7]
+        template = build_template_6m(initial_balance, inflow_7m, outflow_7m)
         # add template to our list of training data
-        df_list.append(template)
+        df_list[data_for].append(template)
         # update what will be the new initial balances for the next turn. We need to add the inflow and the outflow
-        # from the first month of the 7 month period considered
+        # from the first month of the 7 months period considered
         df_balance = pd.DataFrame({'initial_balance': initial_balance, 'inflow': inflow_7m.iloc[:, 0],
                                    'outflow': outflow_7m.iloc[:, 0]})
         initial_balance = df_balance.sum(axis=1)
-    training_data = pd.concat(df_list, axis=0, ignore_index=True)
+
+    training_data = {}
+    for split, data_list in df_list.items():
+        X = pd.concat(df_list[split], axis=0, ignore_index=True)
+        # for the target variable y, we use a numpy array with the proper shape so that it can be directly used in
+        # scikit learn.
+        y = X.pop('true_outgoing').values
+        training_data[split] = {'X': X, 'y': y}
     return training_data
 
 
+def get_training_data(test_size: int = 2):
+    """Regroup all the steps needed to process the data for training"""
+    # get the raw data
+    account_path = "data/accounts.csv"
+    transaction_path = "data/transactions.csv"
+    accounts = get_data(account_path)
+    transactions = get_data(transaction_path)
+
+    # We only keep accounts that have more than 180 days of history
+    accounts, transactions = get_df_with_history(accounts, transactions)
+
+    # we get the monthly (30 days) inflow and outflow of each account
+    update_date = accounts['update_date'].iloc[0]
+    inflow, outflow = get_monthly_flows(transactions, update_date)
+
+    # Organise the data so that we can train the model. We use 6 consecutive months of data as a training 7 and
+    # the sum of the outflows of the 7th month as target. We roll over time using that process.
+    initial_balances = get_initial_balance(accounts, inflow, outflow)
+    training_data = build_training_data(initial_balances, inflow, outflow, test_size=test_size)
+    return training_data
 
 
+def process_data(accounts, transactions):
+    """process data so that they can be used for inference by the api"""
+    # we get the monthly (30 days) inflow and outflow of each account
+    update_date = accounts['update_date'].iloc[0]
+    inflow, outflow = get_monthly_flows(transactions, update_date)
+    initial_balance = get_initial_balance(accounts, inflow, outflow)
+    # in case we have more than 6 months of data we make sure we only keep the last 6 months. The model has been trained
+    # on 6 months of data.
+    # we need to adjust the initial balance accordingly
+    initial_balance += inflow.iloc[:, :-6].sum(axis=1) + outflow.iloc[:, :-6].sum(axis=1)
+    inflow = inflow.iloc[:, -6:]
+    outflow = outflow.iloc[:, -6:]
 
-
-
-
-
-
+    template = build_template_6m(initial_balance, inflow, outflow, inference=True)
+    return template
