@@ -1,8 +1,10 @@
 from datetime import date
 from typing import List
 
+import pandas as pd
 from fastapi import FastAPI
 from pydantic import BaseModel, validator
+from src import model
 
 
 class Account(BaseModel):
@@ -38,8 +40,8 @@ class RequestPredict(BaseModel):
                 newest_t = t.date
 
         assert (
-            update_t - newest_t
-        ).days >= 0, "Update Date Inconsistent With Transaction Dates"
+                       update_t - newest_t
+               ).days >= 0, "Update Date Inconsistent With Transaction Dates"
         assert (update_t - oldest_t).days > 183, "Not Enough Transaction History"
 
         return v
@@ -50,9 +52,17 @@ class ResponsePredict(BaseModel):
 
 
 def predict(
-    transactions: List[Transaction], account: Account
+        transactions: List[Transaction], account: Account
 ) -> float:
-    raise NotImplementedError()
+    account_df = pd.DataFrame({'balance': [account.balance], 'update_date': [account.update_date]})
+    account_df['update_date'] = pd.to_datetime(account_df['update_date'])
+    transaction_df = pd.DataFrame(map(dict, transactions))
+    transaction_df['date'] = pd.to_datetime(transaction_df['date'])
+    transaction_df['account_id'] = 0  # the code assume there is an account id
+    account_df['id'] = 0
+    prediction = model.predict(account_df, transaction_df)
+    # raise NotImplementedError()
+    return prediction
 
 
 app = FastAPI()
@@ -65,7 +75,7 @@ async def root(predict_body: RequestPredict):
 
     # Call your prediction function/code here
     ####################################################
-    #predicted_amount = predict(transactions, account)
+    predicted_amount = predict(transactions, account)
 
     # Return predicted amount
-    return {"predicted_amount": 0}
+    return {"predicted_amount": predicted_amount}
