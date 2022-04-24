@@ -4,6 +4,7 @@ Test the API
 
 import json
 from datetime import date
+from main import predict
 
 import requests
 
@@ -29,9 +30,11 @@ def test_predict():
 
     print("Calling API with test data:")
     print(test_data)
+    json_data = json.dumps(test_data)
+    print(json_data)
 
     response = requests.post(
-        "http://127.0.0.1:8000/predict", data=json.dumps(test_data)
+        "http://127.0.0.1:8000/predict", data=json_data
     )
 
     print("Response: ")
@@ -41,4 +44,4 @@ def test_predict():
 
 
 if __name__ == "__main__":
-    test_predict()
+    predict()
