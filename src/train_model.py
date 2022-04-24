@@ -7,8 +7,8 @@ import numpy as np
 from lightgbm import LGBMRegressor
 import optuna
 from sklearn.metrics import mean_squared_error, r2_score
-from data_tools import get_training_data
-from hyper_params import get_objective
+from .data_tools import get_training_data
+from .hyper_params import get_objective
 
 
 def train_lgbm(test_size: int = 2):
@@ -57,11 +57,12 @@ def eval_model(model: LGBMRegressor, x_test: pd.DataFrame = None, y_test: pd.Dat
     eval = {}
     eval['r2'] = r2_score(y_test, y_predict)
     eval['rmse'] = np.sqrt(mean_squared_error(y_test, y_predict))
-    eval['rmse_percent'] = eval['mse'] / np.abs(y_test.mean()) * 100
+    eval['rmse_percent'] = round(eval['rmse'] / np.abs(y_test.mean()) * 100, 1)
     return eval
 
 
 if __name__ == '__main__':
     model = train_lgbm()
-    eval = eval_model(model)
-    print(eval)
+    result = eval_model(model)
+    print(result)
+
