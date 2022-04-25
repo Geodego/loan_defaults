@@ -23,11 +23,3 @@ def test_predict():
     transaction_df['account_id'] = 0  # the code assume there is an account id
     account_df['id'] = 0
     _ = predict(account_df, transaction_df)
-
-
-
-
-
-
-
-
