@@ -20,4 +20,3 @@ def test_get_absolute_path():
     assert absolute_path.is_absolute()
     assert absolute_path.name == 'accounts.csv'
     assert absolute_path.parents[1].name == root_directory
-
