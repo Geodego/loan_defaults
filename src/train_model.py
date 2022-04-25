@@ -65,4 +65,3 @@ if __name__ == '__main__':
     model = train_lgbm()
     result = eval_model(model)
     print(result)
-
