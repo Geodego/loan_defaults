@@ -148,6 +148,8 @@ def build_template_6m(initial_balance: pd.Series, inflow: pd.DataFrame, outflow:
     :return:
     pd.Dataframe that can be used for training or for inference by sklearn models.
     """
+    inflow = inflow.copy()
+    outflow = outflow.copy()
     if inference:
         inflow_cols = {col: f'{i + 1}M inflow' for i, col in enumerate(inflow.columns)}
         outflow_cols = {col: f'{i + 1}M outflow' for i, col in enumerate(outflow.columns)}
@@ -205,8 +207,8 @@ def build_training_data(initial_balance: pd.Series, inflow: pd.DataFrame,
             data_for = 'val'
         else:
             data_for = 'test'
-        inflow_7m = inflow.iloc[:, k:k + 7]
-        outflow_7m = outflow.iloc[:, k:k + 7]
+        inflow_7m = inflow.iloc[:, k:k + 7].copy()
+        outflow_7m = outflow.iloc[:, k:k + 7].copy()
         template = build_template_6m(initial_balance, inflow_7m, outflow_7m)
         # add template to our list of training data
         df_list[data_for].append(template)
