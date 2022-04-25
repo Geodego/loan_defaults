@@ -36,7 +36,9 @@ test_main.py that is for testing the api.
     - test_tools.py
 
 ## Method used
-The different steps of the approach followed are detailed in the jupyter notebook.
+The different steps of the approach followed are detailed in the jupyter notebook. Unitary tests are performed using 
+pytest to check that the methods used to process the data behave as expected. All the tests are in the 'tests' folder 
+in 'src'.
 
 ### EDA: 
   - We start with an EDA that reveals that there are no null values in the data but there are duplicates
