@@ -231,7 +231,8 @@ def build_training_data(initial_balance: pd.Series, inflow: pd.DataFrame,
 def get_training_data(test_size: int = 2) -> dict:
     """
     Regroup all the steps needed to process the data for training. Split the data between training, validation and
-    testing. For each of these group roll 7 months over time, creating a 13 columns dataframe X made of 6 months of inflow,
+    testing. For each of these group roll 7 months over time, creating a 13 columns dataframe X made of 6 months of
+    inflow,
     6 months of outflow and the initial balance and a numpy array y containing the monthly outflows of the seventh
     month.
     :param test_size: int, represent the number of months kept for to the test split.
