@@ -208,7 +208,7 @@ def data_split(accounts, flows):
     training_data = build_training_data(initial_balances, inflow, outflow)
     x_train, x_val, x_test = training_data['train']['X'], training_data['val']['X'], training_data['test']['X']
     y_test = training_data['test']['y']
-    return x_train, x_val, x_test, y_test
+    return x_train, x_val, x_test, y_test, inflow, outflow, initial_balances
 
 
 class TestBuildTrainingData:
@@ -220,7 +220,7 @@ class TestBuildTrainingData:
         """
         Test the repartition between training validation and testing and the shape of features
         """
-        x_train, x_val, x_test, _ = data_split
+        x_train, x_val, x_test, _, _, _, _ = data_split
         assert len(x_train) == 4
         assert len(x_val) == 4
         assert len(x_test) == 4
@@ -251,21 +251,14 @@ class TestBuildTrainingData:
         # perform all the necessary checks
         build_training_data_checks(final_balance, initial_balances, inflow, outflow, x_train, x_test, y_test)
 
-    def test_build_training_data_real(self, accounts, flows):
+    def test_build_training_data_real(self, data_split, accounts):
         """
         Check that all the steps performed in build_training_data are performed properly. For that purpose we
         reconstitute the final balances from data in x_train and x_test. This version of th test uses real data.
         """
-        # To make things simple for this test we keep the last 12 months of data and keep only 2 accounts
-        ids = [4, 7]
-        inflow, outflow = flows
-        inflow, outflow = inflow.loc[ids].iloc[:, -12:], outflow.loc[ids].iloc[:, -12:]
-        initial_balances = get_initial_balance(accounts, inflow, outflow)
-        training_data = build_training_data(initial_balances, inflow, outflow)
-        x_train, x_val, x_test = training_data['train']['X'], training_data['val']['X'], training_data['test']['X']
-        y_test = training_data['test']['y']
+        x_train, x_val, x_test, y_test, inflow, outflow, initial_balances = data_split
         # we check that we can calculate properly the final balances for one account
-        final_balance = accounts['balance'].loc[ids]
+        final_balance = accounts['balance'].loc[initial_balances.index]
 
         # perform all the necessary checks
         build_training_data_checks(final_balance, initial_balances, inflow, outflow, x_train, x_test, y_test)
