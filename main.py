@@ -72,9 +72,6 @@ app = FastAPI()
 async def root(predict_body: RequestPredict):
     transactions = predict_body.transactions
     account = predict_body.account
-
-    # Call your prediction function/code here
-    ####################################################
     predicted_amount = predict(transactions, account)
 
     # Return predicted amount
